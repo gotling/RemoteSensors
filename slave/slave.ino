@@ -4,6 +4,8 @@
 #include "Adafruit_AM2320.h"
 
 #define LED D2
+#define INITIALTIMER 10000
+#define RUNNINGTIMER 60000
 
 Adafruit_AM2320 am2320 = Adafruit_AM2320();
 
@@ -23,15 +25,20 @@ typedef struct struct_message {
 struct_message myData;
 
 unsigned long lastTime = 0;  
-unsigned long timerDelay = 10000;  // send readings timer
+unsigned long timerDelay = INITIALTIMER;  // send readings timer
 unsigned long ledTimeout = 2000;  // seconds to keep led on after successfull send
+
+bool setupActive = true;
+unsigned long setupTime = 0;
+unsigned long setupTimeout = 10 * 60 * 1000;
 
 // Callback when data is sent
 void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
   Serial.print("Last Packet Send Status: ");
   if (sendStatus == 0) {
     Serial.println("Delivery success");
-    digitalWrite(LED_BUILTIN, LOW);
+    if (setupActive)
+      digitalWrite(LED_BUILTIN, LOW);
   } else {
     Serial.println("Delivery fail");
   }
@@ -39,7 +46,7 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
  
 void setup() {
   // Init Serial Monitor
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   while (!Serial) {
     delay(10); // hang out until serial port opens
@@ -66,13 +73,24 @@ void setup() {
   
   // Register peer
   esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_SLAVE, 1, NULL, 0);
+
+  setupTime = millis();
 }
  
 void loop() {
-  // Turn of LED after set time
-  if ((millis() - lastTime) > ledTimeout) {
-    digitalWrite(LED_BUILTIN, HIGH);
+  if (setupActive) {
+    if ((millis() - setupTime) > setupTimeout) {
+      timerDelay = RUNNINGTIMER;
+      setupActive = false;
+      Serial.println("Setup deactivated");
+    }
+
+    // Turn of LED after set time
+    if ((millis() - lastTime) > ledTimeout) {
+      digitalWrite(LED_BUILTIN, HIGH);
+    }
   }
+  
 
   // Read and send data
   if ((millis() - lastTime) > timerDelay) {
