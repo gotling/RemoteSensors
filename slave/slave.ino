@@ -3,7 +3,7 @@
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
 
-#define LED D2
+#define LED LED_BUILTIN // D2
 #define INITIALTIMER 10000
 #define RUNNINGTIMER 60000
 
@@ -27,6 +27,7 @@ struct_message myData;
 unsigned long lastTime = 0;  
 unsigned long timerDelay = INITIALTIMER;  // send readings timer
 unsigned long ledTimeout = 2000;  // seconds to keep led on after successfull send
+bool ledOn = false;
 
 bool setupActive = true;
 unsigned long setupTime = 0;
@@ -34,13 +35,16 @@ unsigned long setupTimeout = 10 * 60 * 1000;
 
 // Callback when data is sent
 void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
-  Serial.print("Last Packet Send Status: ");
+  Serial.print("Send Status: ");
   if (sendStatus == 0) {
-    Serial.println("Delivery success");
-    if (setupActive)
-      digitalWrite(LED_BUILTIN, LOW);
+    Serial.println("Success");
+    if (setupActive) {
+      digitalWrite(LED, LOW);
+      ledOn = true;
+      Serial.println("LED on");
+    }
   } else {
-    Serial.println("Delivery fail");
+    Serial.println("Fail");
   }
 }
  
@@ -55,7 +59,8 @@ void setup() {
   Wire.begin(4, 0);
   am2320.begin();
 
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, HIGH);
  
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
@@ -85,9 +90,11 @@ void loop() {
       Serial.println("Setup deactivated");
     }
 
-    // Turn of LED after set time
-    if ((millis() - lastTime) > ledTimeout) {
-      digitalWrite(LED_BUILTIN, HIGH);
+    // Turn off LED after set time
+    if (ledOn && ((millis() - lastTime) > ledTimeout)) {
+      Serial.println("LED off");
+      digitalWrite(LED, HIGH);
+      ledOn = false;
     }
   }
   
@@ -100,10 +107,10 @@ void loop() {
     myData.humid = am2320.readHumidity();
 
     Serial.print("Random: ");
-    Serial.println(myData.random);
-    Serial.print("Temp: ");
-    Serial.println(myData.temp);
-    Serial.print("Humidity: ");
+    Serial.print(myData.random);
+    Serial.print(" Temp: ");
+    Serial.print(myData.temp);
+    Serial.print(" Humidity: ");
     Serial.println(myData.humid);
 
     // Send message via ESP-NOW
@@ -111,4 +118,6 @@ void loop() {
   
     lastTime = millis();
   }
+
+  delay(100);
 }

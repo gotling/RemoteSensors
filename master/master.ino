@@ -1,7 +1,9 @@
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 
-#define LED D2
+#include "config.h"
+
+#define LED LED_BUILTIN
 
 // Structure example to receive data
 // Must match the sender structure
@@ -22,6 +24,10 @@ bool setupActive = true;
 unsigned long setupTime = 0;
 unsigned long setupTimeout = 10 * 60 * 1000;
 
+AdafruitIO_Feed *temperatureFeed = io.feed("temperature");
+AdafruitIO_Feed *humidityFeed = io.feed("humidity");
+AdafruitIO_Feed *randomFeed = io.feed("random");
+
 // Callback function that will be executed when data is received
 void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
   memcpy(&myData, incomingData, sizeof(myData));
@@ -40,19 +46,17 @@ void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
     ledOn = true;
     lastTime = millis();
   }
+
+  if (!isnan(myData.temp))
+    temperatureFeed->save(myData.temp);
+  if (!isnan(myData.humid))
+    humidityFeed->save(myData.humid);
+  if (!isnan(myData.random))
+    randomFeed->save(myData.random);
 }
- 
-void setup() {
-  // Initialize Serial Monitor
-  Serial.begin(115200);
 
-  while (!Serial) {
-    delay(100); // hang out until serial port opens
-  }
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-  
+void connectEspNow() {
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
@@ -66,11 +70,40 @@ void setup() {
   // get recv packer info
   esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
   esp_now_register_recv_cb(OnDataRecv);
+}
+
+void connectAdafruit() {
+  Serial.println("Connecting to Adafruit.");
+  io.connect();
+}
+
+void setup() {
+  // Initialize Serial Monitor
+  Serial.begin(115200);
+
+  while (!Serial) {
+    delay(10); // hang out until serial port opens
+  }
+
+  Serial.println("Receiver starting");
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+
+  connectEspNow();
 
   setupTime = millis();
+
+  connectAdafruit();
+
+  delay(1000);
+
+  Serial.println("Receiver started.");
 }
 
 void loop() {
+  io.run();
+
   if (setupActive) {
     if ((millis() - setupTime) > setupTimeout) {
       setupActive = false;
@@ -84,4 +117,5 @@ void loop() {
       ledOn = false;
     }
   }
+  delay(100);
 }
